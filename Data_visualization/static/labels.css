@@ -1,0 +1,11 @@
+.sub-label {
+  margin: 13px 0 6px;
+  color: var(--muted);
+  font-size: 10px;
+}
+
+input[type="range"]:disabled,
+.nav-row button:disabled {
+  opacity: 0.35;
+  cursor: not-allowed;
+}

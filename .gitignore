@@ -1,0 +1,15 @@
+# Local medical datasets (keep sample_data itself available).
+sample_data/*/
+
+# Local and generated medical images.
+Data_visualization/nifti/
+*.nii
+*.nii.gz
+
+# Runtime caches and Python bytecode.
+**/.cache/
+**/__pycache__/
+*.py[cod]
+
+# macOS metadata.
+.DS_Store
