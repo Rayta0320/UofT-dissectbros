@@ -56,7 +56,7 @@ python run.py --image image.nii.gz --aorta-mask aorta_mask.nii.gz --output predi
 `data/subject001/orig1.nii`. 
 - Replace `aorta_mask.nii.gz` with its aorta-mask
 path, such as `data/subject001/mask1.nii`.
-- Replace prediction.json with the directory name, such as prediction/subject001.json.
+- Replace prediction.json with the directory name, such as `prediction/subject001.json`.
 The result is saved as `subject001.json` inside the `prediction` folder.
 
 For an interactive 3D CT review, run:
