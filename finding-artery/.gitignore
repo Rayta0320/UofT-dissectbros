@@ -8,10 +8,6 @@ tests/
 evaluate.py
 score.py
 
-# Generated predictions and interactive review artifacts.
-predictions/
-visual_checks/
-
 # Local and generated medical images.
 Data_visualization/nifti/
 *.nii
