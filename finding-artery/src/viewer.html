@@ -1,0 +1,120 @@
+<!doctype html>
+<html lang="en">
+<head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Branchseed · CT review</title>
+<style>
+:root{color-scheme:dark;font-family:system-ui,-apple-system,sans-serif;color:#e4edf5;background:#0b111a;font-size:13px}
+*{box-sizing:border-box}body{margin:0}button,select,input{font:inherit}button,select{background:#1c2a3b;color:#e4edf5;border:1px solid #42536b;border-radius:6px;padding:7px 10px}button{cursor:pointer}button:hover{background:#30445d}button:disabled{opacity:.4;cursor:default}:focus-visible{outline:2px solid #52d6ef;outline-offset:3px}input[type=range]{accent-color:#55d5e9;min-width:60px;cursor:pointer}input[type=checkbox]{accent-color:#55d5e9}
+header{padding:13px 20px;display:flex;align-items:center;gap:16px;border-bottom:1px solid #283648}header strong{font-size:18px}#study{color:#85d7e6}#summary{margin-left:auto;color:#aebfd0}.toolbar{display:flex;align-items:center;flex-wrap:wrap;gap:10px;padding:10px 20px;border-bottom:1px solid #283648;background:#121d2b}.group{display:flex;align-items:center;gap:8px;padding-right:15px;border-right:1px solid #344254}.group:last-child{border:0}.group label{display:flex;align-items:center;gap:5px}.group input[type=range]{width:100px}output{font-variant-numeric:tabular-nums;color:#b9c8d8;min-width:32px}
+#workspace{padding:12px;display:grid;grid-template-columns:1fr 1fr;grid-template-rows:1fr 1fr;gap:12px;height:calc(100dvh - 214px);min-height:600px}.panel{min-width:0;min-height:0;display:flex;flex-direction:column;border:1px solid #314154;border-radius:10px;overflow:hidden;background:#0e1723}.panel-head{display:flex;align-items:center;gap:10px;padding:8px 12px;background:#172333;min-height:42px}.panel-head strong{font-size:14px}.badge{color:#91a7ba;font-size:11px}.panel-head button{margin-left:auto;padding:4px 8px}.stage{flex:1;min-height:0;position:relative;background:#020507;overflow:hidden}.stage canvas{width:100%;height:100%;display:block;cursor:crosshair}.position{position:absolute;bottom:8px;left:10px;font-size:11px;color:#c9d5df;background:#08121bce;padding:3px 5px;pointer-events:none;font-variant-numeric:tabular-nums}.edge{position:absolute;color:#99b8c6;font-size:11px;pointer-events:none;background:#08121ba8;padding:2px}.edge.top{top:6px;left:50%}.edge.bottom{bottom:6px;left:50%}.edge.left{left:6px;top:50%}.edge.right{right:6px;top:50%}.slice-controls{display:flex;align-items:center;gap:8px;padding:8px 12px;background:#121d2b}.slice-controls input{flex:1;width:100%}.slice-controls button{padding:2px 9px;font-size:18px}.slice-controls output{min-width:90px;text-align:right}.plot-stage{flex:1;min-height:0;position:relative}#plot{position:absolute;inset:0}.plot-controls{display:flex;gap:14px;padding:8px 12px;background:#121d2b;flex-wrap:wrap}.plot-controls label{display:flex;align-items:center;gap:5px}
+footer{padding:0 20px 12px;color:#a1b4c6;line-height:1.7;font-size:12px}.key{display:flex;gap:18px;flex-wrap:wrap}.key span:before{content:'●';margin-right:5px}.key .ostium:before{color:#ff5555}.key .seed:before{color:#ffe433}.key .path:before{color:#00dffc}.key .mask:before{color:#35c46a}#detail{color:#c9dfec}.panel.expanded{position:fixed;inset:12px;z-index:10;box-shadow:0 0 0 20px #0b111af0}body.expanding{overflow:hidden}
+@media(max-width:850px){header{flex-wrap:wrap}#summary{margin-left:0}.group{border:0;padding:0}.toolbar{padding:8px 12px}#workspace{height:auto;min-height:0;grid-template-columns:1fr;grid-template-rows:none}.panel{height:420px}.panel.expanded{height:auto}footer{padding:10px 12px}}
+</style></head>
+<body>
+<header><strong>Branchseed <span style="font-weight:400;color:#9aafc3">/ CT review</span></strong><span id="study"></span><span id="summary"></span></header>
+<div class="toolbar" aria-label="Review controls">
+  <div class="group"><label for="branch">Detection</label><select id="branch"></select><button id="seed">Go to seed</button><button id="ostium">Go to ostium</button><span id="detail"></span></div>
+  <div class="group"><label>Window <input id="window" aria-label="CT window width in HU" type="range" min="50" max="2000" step="10" value="700"></label><output id="window-value">700</output><label>Level <input id="level" aria-label="CT window level in HU" type="range" min="-500" max="1000" step="5" value="250"></label><output id="level-value">250</output></div>
+  <div class="group"><label>Zoom <input id="zoom" aria-label="CT slice zoom" type="range" min="1" max="6" step="0.25" value="1"></label><output id="zoom-value">1×</output><label><input id="overlays" type="checkbox" checked> Predictions</label><label><input id="crosshairs" type="checkbox" checked> Crosshairs</label><button id="reset">Reset view</button></div>
+</div>
+<main id="workspace"></main>
+<footer><div class="key"><span class="ostium">Ostium</span><span class="seed">5 mm seed</span><span class="path">Centerline</span><span class="mask">Aorta surface (3D)</span></div>
+<div>Scroll over a CT view or use its slider to change slices. Click the CT to place linked crosshairs. Zoom centers on the crosshairs. Expand any panel for a closer look.</div>
+<div id="resolution"></div></footer>
+<script>
+'use strict';
+const V=__VIEWER_DATA__;
+const $=id=>document.getElementById(id);
+const raw=atob(V.ct_base64),CT=new Int16Array(raw.length/2);
+for(let i=0;i<CT.length;i++)CT[i]=raw.charCodeAt(i*2)|(raw.charCodeAt(i*2+1)<<8);
+const names=['Axial','Coronal','Sagittal'],horizontal=[2,2,1],vertical=[1,0,0];
+const state={cursor:V.initial.map((k,a)=>V.coordinates[a][k]),indices:[...V.initial],zoom:1,width:700,level:250,branch:0};
+const cache=[null,null,null],transforms=[null,null,null];
+function clamp(x,lo,hi){return Math.max(lo,Math.min(hi,x))}
+function flat(z,y,x){return (z*V.shape[1]+y)*V.shape[2]+x}
+function lps(p){const xyz=[p[2]+V.offset[2],p[1]+V.offset[1],p[0]+V.offset[0]];return V.origin_lps.map((o,r)=>o+V.direction[r].reduce((s,d,c)=>s+d*xyz[c]*V.spacing_xyz[c],0))}
+function nearest(axis,value){const coords=V.coordinates[axis];let best=0;for(let i=1;i<coords.length;i++)if(Math.abs(coords[i]-value)<Math.abs(coords[best]-value))best=i;return best}
+function edgeLabel(axis,sign){const xyzAxis=2-axis,vector=V.direction.map(row=>row[xyzAxis]*sign);let i=0;for(let j=1;j<3;j++)if(Math.abs(vector[j])>Math.abs(vector[i]))i=j;return vector[i]>=0?['L','P','S'][i]:['R','A','I'][i]}
+for(let axis=0;axis<3;axis++){
+  const panel=document.createElement('section');panel.className='panel';panel.id='panel-'+axis;
+  panel.innerHTML=`<div class="panel-head"><strong>${names[axis]}</strong><span class="badge">CT + predictions</span><button class="expand" aria-label="Expand ${names[axis]} view">Expand</button></div><div class="stage"><canvas id="canvas-${axis}" tabindex="0" aria-label="${names[axis]} CT: scroll or arrow keys to change slice; click to position crosshairs"></canvas><span class="edge top">${edgeLabel(vertical[axis],-1)}</span><span class="edge bottom">${edgeLabel(vertical[axis],1)}</span><span class="edge left">${edgeLabel(horizontal[axis],-1)}</span><span class="edge right">${edgeLabel(horizontal[axis],1)}</span><span class="position" id="label-${axis}"></span></div><div class="slice-controls"><button id="prev-${axis}" aria-label="Previous ${names[axis]} slice">−</button><input id="slider-${axis}" aria-label="${names[axis]} slice" type="range" min="0" max="${V.shape[axis]-1}" step="1"><button id="next-${axis}" aria-label="Next ${names[axis]} slice">+</button><output id="count-${axis}"></output></div>`;
+  $('workspace').appendChild(panel);
+}
+</script>
+<section class="panel" id="panel-3"><div class="panel-head"><strong>3D overview</strong><span class="badge">Drag to rotate · scroll to zoom</span><button class="expand" aria-label="Expand 3D view">Expand</button></div><div class="plot-stage"><div id="plot">__PLOT_HTML__</div></div><div class="plot-controls"><label><input id="planes" type="checkbox" checked> CT planes</label><label><input id="aorta" type="checkbox" checked> Aorta</label><label><input id="lumen" type="checkbox" checked> Grown lumen</label><button id="camera">Reset camera</button></div></section>
+<script>
+// Move the already initialized plot into the fourth panel.
+$('workspace').appendChild($('panel-3'));
+const plot=$('branchseed-3d');
+function slice(axis){
+  const k=state.indices[axis],key=[k,state.width,state.level].join(':');
+  if(cache[axis]?.key===key)return cache[axis].canvas;
+  const rows=V.shape[vertical[axis]],cols=V.shape[horizontal[axis]],canvas=document.createElement('canvas');canvas.width=cols;canvas.height=rows;
+  const ctx=canvas.getContext('2d'),image=ctx.createImageData(cols,rows),low=state.level-state.width/2;
+  for(let r=0;r<rows;r++)for(let c=0;c<cols;c++){const ijk=axis===0?[k,r,c]:(axis===1?[r,k,c]:[r,c,k]),g=clamp(Math.round(255*(CT[flat(...ijk)]-low)/state.width),0,255),n=4*(r*cols+c);image.data[n]=image.data[n+1]=image.data[n+2]=g;image.data[n+3]=255}
+  ctx.putImageData(image,0,0);cache[axis]={key,canvas};return canvas;
+}
+function draw(axis){
+  const canvas=$('canvas-'+axis),rect=canvas.getBoundingClientRect();if(!rect.width||!rect.height)return;
+  const dpr=window.devicePixelRatio||1;canvas.width=Math.round(rect.width*dpr);canvas.height=Math.round(rect.height*dpr);
+  const ctx=canvas.getContext('2d');ctx.scale(dpr,dpr);ctx.fillStyle='#020507';ctx.fillRect(0,0,rect.width,rect.height);
+  const ha=horizontal[axis],va=vertical[axis],cols=V.shape[ha],rows=V.shape[va];
+  const dx=V.spacing_zyx[ha]*(V.coordinates[ha][1]-V.coordinates[ha][0]||1),dy=V.spacing_zyx[va]*(V.coordinates[va][1]-V.coordinates[va][0]||1);
+  const scale=Math.min(rect.width/(cols*dx),rect.height/(rows*dy))*state.zoom,sx=dx*scale,sy=dy*scale;
+  const cx=state.zoom===1?(cols-1)/2:nearest(ha,state.cursor[ha]),cy=state.zoom===1?(rows-1)/2:nearest(va,state.cursor[va]);
+  const ox=rect.width/2-(cx+.5)*sx,oy=rect.height/2-(cy+.5)*sy;
+  transforms[axis]={ox,oy,sx,sy};ctx.imageSmoothingEnabled=false;ctx.drawImage(slice(axis),ox,oy,cols*sx,rows*sy);
+  const x=q=>ox+(q/(V.coordinates[ha][1]-V.coordinates[ha][0]||1)+.5)*sx,y=q=>oy+(q/(V.coordinates[va][1]-V.coordinates[va][0]||1)+.5)*sy;
+  const fixed=V.coordinates[axis][state.indices[axis]],half=(V.coordinates[axis][1]-V.coordinates[axis][0]||1)/2;
+  if($('overlays').checked)for(let i=0;i<V.branches.length;i++){
+    const b=V.branches[i];ctx.globalAlpha=i===state.branch?1:.5;ctx.lineWidth=i===state.branch?2.5:1.5;ctx.strokeStyle='#00dffc';
+    // Clip each segment to this slice slab so crossings remain visible.
+    for(let j=1;j<b.path.length;j++){const a=b.path[j-1],p=b.path[j],d=p[axis]-a[axis];let t0=0,t1=1;
+      if(Math.abs(d)<1e-9){if(Math.abs(a[axis]-fixed)>half)continue}else{const u=(fixed-half-a[axis])/d,v=(fixed+half-a[axis])/d;t0=Math.max(0,Math.min(u,v));t1=Math.min(1,Math.max(u,v));if(t0>t1)continue}
+      const q=t=>a.map((n,k)=>n+t*(p[k]-n));const start=q(t0),end=q(t1);ctx.beginPath();ctx.moveTo(x(start[ha]),y(start[va]));ctx.lineTo(x(end[ha]),y(end[va]));ctx.stroke();
+    }
+    for(const [p,color] of [[b.ostium,'#ff5555'],[b.seed,'#ffe433']])if(Math.abs(p[axis]-fixed)<=half){ctx.beginPath();ctx.arc(x(p[ha]),y(p[va]),i===state.branch?5:3,0,2*Math.PI);ctx.fillStyle=color;ctx.fill();ctx.strokeStyle='#081019';ctx.lineWidth=1;ctx.stroke()}
+  }
+  ctx.globalAlpha=1;
+  if($('crosshairs').checked){ctx.strokeStyle='#c9f2ffaa';ctx.lineWidth=1;ctx.setLineDash([5,4]);const px=x(state.cursor[ha]),py=y(state.cursor[va]);ctx.beginPath();ctx.moveTo(px,0);ctx.lineTo(px,rect.height);ctx.moveTo(0,py);ctx.lineTo(rect.width,py);ctx.stroke();ctx.setLineDash([])}
+  const q=lps(state.cursor);$('label-'+axis).textContent='LPS '+q.map(n=>n.toFixed(1)).join(', ')+' mm';
+  $('slider-'+axis).value=state.indices[axis];$('count-'+axis).textContent=(state.indices[axis]+1)+' / '+V.shape[axis];
+  $('prev-'+axis).disabled=state.indices[axis]===0;$('next-'+axis).disabled=state.indices[axis]===V.shape[axis]-1;
+}
+function plane(axis){const rows=V.shape[vertical[axis]],cols=V.shape[horizontal[axis]],k=state.indices[axis],step=Math.max(1,Math.ceil(Math.max(rows,cols)/100)),X=[],Y=[],Z=[],C=[];
+  for(let r=0;r<rows;r+=step){const xx=[],yy=[],zz=[],cc=[];for(let c=0;c<cols;c+=step){const ijk=axis===0?[k,r,c]:(axis===1?[r,k,c]:[r,c,k]),q=lps(ijk.map((n,a)=>V.coordinates[a][n]));xx.push(q[0]);yy.push(q[1]);zz.push(q[2]);cc.push(CT[flat(...ijk)])}X.push(xx);Y.push(yy);Z.push(zz);C.push(cc)}return {x:X,y:Y,z:Z,surfacecolor:C}}
+let timer=null;
+function sync3d(){clearTimeout(timer);timer=setTimeout(()=>{if(!plot.data)return;const planes=[0,1,2].map(plane);Plotly.restyle(plot,{x:planes.map(p=>p.x),y:planes.map(p=>p.y),z:planes.map(p=>p.z),surfacecolor:planes.map(p=>p.surfacecolor),cmin:state.level-state.width/2,cmax:state.level+state.width/2},[0,1,2])},100)}
+function render(){for(let a=0;a<3;a++)draw(a);sync3d()}
+function go(point){state.indices=point.map((n,a)=>nearest(a,n));state.cursor=state.indices.map((n,a)=>V.coordinates[a][n]);render()}
+function move(axis,k){state.indices[axis]=clamp(k,0,V.shape[axis]-1);state.cursor[axis]=V.coordinates[axis][state.indices[axis]];render()}
+for(let axis=0;axis<3;axis++){
+  $('slider-'+axis).addEventListener('input',e=>move(axis,+e.target.value));
+  $('prev-'+axis).onclick=()=>move(axis,state.indices[axis]-1);$('next-'+axis).onclick=()=>move(axis,state.indices[axis]+1);
+  const canvas=$('canvas-'+axis);canvas.addEventListener('wheel',e=>{e.preventDefault();if(e.deltaY)move(axis,state.indices[axis]+Math.sign(e.deltaY))},{passive:false});
+  canvas.onkeydown=e=>{if(['ArrowUp','ArrowDown'].includes(e.key)){e.preventDefault();move(axis,state.indices[axis]+(e.key==='ArrowUp'?1:-1))}};
+  canvas.onclick=e=>{const t=transforms[axis],rect=canvas.getBoundingClientRect(),ha=horizontal[axis],va=vertical[axis],p=[...state.cursor];p[ha]=V.coordinates[ha][clamp(Math.round((e.clientX-rect.left-t.ox)/t.sx-.5),0,V.shape[ha]-1)];p[va]=V.coordinates[va][clamp(Math.round((e.clientY-rect.top-t.oy)/t.sy-.5),0,V.shape[va]-1)];go(p)};
+}
+$('study').textContent=V.case_id;$('summary').textContent=V.branches.length+' detected branches';
+if(!V.branches.length){$('branch').add(new Option('No accepted branches',''));$('branch').disabled=$('seed').disabled=$('ostium').disabled=true}
+else V.branches.forEach((b,i)=>$('branch').add(new Option(b.label,i)));
+function branchDetail(){const b=V.branches[state.branch];$('detail').textContent=b?.radius_mm!=null?'r = '+b.radius_mm.toFixed(2)+' mm':''}
+$('branch').onchange=()=>{state.branch=+$('branch').value;branchDetail();go(V.branches[state.branch].seed)};
+$('seed').onclick=()=>go(V.branches[state.branch].seed);$('ostium').onclick=()=>go(V.branches[state.branch].ostium);
+for(const [id,property] of [['window','width'],['level','level'],['zoom','zoom']])$(id).oninput=()=>{state[property]=+$(id).value;$(id+'-value').textContent=$(id).value+(id==='zoom'?'×':'');render()};
+function visibility(predicate,visible){if(!plot.data)return;const ids=plot.data.map((t,i)=>predicate(t,i)?i:-1).filter(i=>i>=0);if(ids.length)Plotly.restyle(plot,{visible},ids)}
+$('planes').onchange=()=>visibility((t,i)=>i<3,$('planes').checked);
+$('aorta').onchange=()=>visibility(t=>t.name==='Supplied aorta mask',$('aorta').checked);
+$('lumen').onchange=()=>visibility(t=>t.legendgroup==='grown',$('lumen').checked);
+$('overlays').onchange=()=>{visibility(t=>t.type==='scatter3d',$('overlays').checked);render()};$('crosshairs').onchange=render;
+const resetCamera=()=>Plotly.relayout(plot,{'scene.camera':{eye:{x:1.25,y:1.25,z:1.25},center:{x:0,y:0,z:0},up:{x:0,y:0,z:1}}});$('camera').onclick=resetCamera;
+$('reset').onclick=()=>{state.zoom=1;state.width=700;state.level=250;for(const [id,value] of [['zoom',1],['window',700],['level',250]]){$(id).value=value;$(id+'-value').textContent=value+(id==='zoom'?'×':'')}for(const id of ['overlays','crosshairs','planes','aorta','lumen'])$(id).checked=true;visibility(()=>true,true);go(V.initial.map((k,a)=>V.coordinates[a][k]));resetCamera()};
+function collapse(){document.querySelectorAll('.panel.expanded').forEach(p=>{p.classList.remove('expanded');p.querySelector('.expand').textContent='Expand'});document.body.classList.remove('expanding')}
+document.querySelectorAll('.expand').forEach(b=>b.onclick=()=>{const panel=b.closest('.panel'),was=panel.classList.contains('expanded');collapse();if(!was){panel.classList.add('expanded');b.textContent='Restore';document.body.classList.add('expanding')}});
+document.addEventListener('keydown',e=>{if(e.key==='Escape')collapse()});
+new ResizeObserver(()=>{for(let a=0;a<3;a++)draw(a);if(plot.data)Plotly.Plots.resize(plot)}).observe($('workspace'));
+for(const panel of document.querySelectorAll('.panel'))new ResizeObserver(()=>{for(let a=0;a<3;a++)draw(a);if(plot.data)Plotly.Plots.resize(plot)}).observe(panel);
+const oblique=V.direction.some(row=>Math.max(...row.map(Math.abs))<.999);
+$('resolution').textContent='Aorta-centered CT crop · all loaded slices · spacing '+V.spacing_zyx.slice().reverse().map(n=>n.toFixed(2)).join(' × ')+' mm (x, y, z).'+(oblique?' Views follow acquisition axes; edge letters indicate the nearest anatomical direction.':'');
+branchDetail();render();
+</script></body></html>

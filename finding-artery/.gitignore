@@ -1,0 +1,27 @@
+# Local medical datasets (keep sample_data itself available).
+sample_data/*/
+data/
+eval/
+
+# Evaluation-only code and tests are not part of the submission runtime.
+tests/
+evaluate.py
+score.py
+
+# Generated predictions and interactive review artifacts.
+predictions/
+visual_checks/
+
+# Local and generated medical images.
+Data_visualization/nifti/
+*.nii
+*.nii.gz
+
+# Runtime caches and Python bytecode.
+**/.cache/
+**/__pycache__/
+*.py[cod]
+
+
+# macOS metadata.
+.DS_Store
